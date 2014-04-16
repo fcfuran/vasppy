@@ -286,8 +286,8 @@ def getpdos(Modeling):
     i = atomselect[0]
     for j in Set[i]:
         spin = []
+        E = []
         for r in j:
-            E = []
             temp = map(float, r.text.split())
             l = len(temp)
             if l != len(orbits) + 1:
