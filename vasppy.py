@@ -283,24 +283,26 @@ def getpdos(Modeling):
         orbits.append(temp)
     Set = Array.find("set")
     pdos = []
+    E = []
     i = atomselect[0]
     for j in Set[i]:
         spin = []
-        E = []
+        E0 = []
         for r in j:
             temp = map(float, r.text.split())
             l = len(temp)
             if l != len(orbits) + 1:
                 print "The file seems broken, please check it."
                 sys.exit(2)
-            E.append(temp[0])
+            E0.append(temp[0])
             spin.append(temp[1:l])
         pdos.append(spin)
+        E.append(E0)
     for i in atomselect:
         if i == atomselect[0]:
             continue
         for j in range(len(Set[i])):
-            for k in range(len(E)):
+            for k in range(len(E[j])):
                 temp = map(float, Set[i][j][k].text.split())
                 l = len(temp)
                 if l != len(orbits) + 1:
@@ -455,7 +457,7 @@ def writepdos(dir, orbits, E, pdos, efermi):
             string += "\t{}".format(j)
         print >> f[i], "{}\ttotal".format(string)
         for j in range(len(pdos[i])):
-            string = "{:.10f}".format(E[j] - ef)
+            string = "{:.10f}".format(E[i][j] - ef)
             for k in pdos[i][j]:
                 string += "\t{:.10f}".format(k)
             string += "\t{:10f}".format(sum(pdos[i][j]))
