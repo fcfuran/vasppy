@@ -31,7 +31,7 @@ def readvasprun(dir):
     return Modeling
 
 
-def search(Tree,attrib,value):
+def search(Tree, attrib, value):
 #Search the first child node of Tree whose "attrib" is "value", return None if not found.
     for i in Tree:
         if i.get(attrib) == value:
@@ -39,7 +39,7 @@ def search(Tree,attrib,value):
     return None
 
 
-def rec2car(kpoint,rec_basis):
+def rec2car(kpoint, rec_basis):
     coord = [0] * 3
     for i in range(3):
         for j in range(3):
@@ -47,12 +47,12 @@ def rec2car(kpoint,rec_basis):
     return coord
 
 
-def calculatek(dir,kpointlist,rec_basis):
+def calculatek(dir, kpointlist, rec_basis):
 #Calaulate the rael k to plot the band structure.
     try:
-        f = open(os.path.abspath(dir)+os.path.sep+"kpoints","w")
+        f = open(os.path.abspath(dir)+os.path.sep+"kpoints.dat","w")
     except:
-        print "Can't open or create the 'kpoints' file"
+        print "Can't open or create the 'kpoints.dat' file"
         sys.exit(3)
     klist = [0] * len(kpointlist)
     coord1 = rec2car(kpointlist[0], rec_basis)
@@ -248,21 +248,83 @@ def getprojected(Modeling):
     return projected
 
 
-def writeband(dir,klist,eigenvalues,efermi):
+def getdos(Modeling):
+    Total = Modeling.find("calculation").find("dos").find("total")
+    if Total == None:
+        print "No DOS information found."
+        return []
+    Set = Total.find("array").find("set")
+    if len(Set) == 2:
+        l = 2
+    else:
+        l = 1
+    dos = []
+    for i in range(l):
+        spin = []
+        for r in Set[i]:
+            temp = map(float, r.text.split())
+            if len(temp) != 3:
+                print "The file seems borken,"
+                return []
+            spin.append(temp)
+        dos.append(spin)
+    return dos
+
+
+def getpdos(Modeling):
+    PDOS = Modeling.find("calculation").find("dos").find("partial")
+    Array = PDOS.find("array")
+    orbits = []
+    atomselect = selectatoms(Modeling)
+    for i in Array.findall("field"):
+        temp = i.text.strip()
+        if temp == "energy":
+            continue
+        orbits.append(temp)
+    Set = Array.find("set")
+    pdos = []
+    i = atomselect[0]
+    for j in Set[i]:
+        spin = []
+        for r in j:
+            E = []
+            temp = map(float, r.text.split())
+            l = len(temp)
+            if l != len(orbits) + 1:
+                print "The file seems broken, please check it."
+                sys.exit(2)
+            E.append(temp[0])
+            spin.append(temp[1:l])
+        pdos.append(spin)
+    for i in atomselect:
+        if i == atomselect[0]:
+            continue
+        for j in range(len(Set[i])):
+            for k in range(len(E)):
+                temp = map(float, Set[i][j][k].text.split())
+                l = len(temp)
+                if l != len(orbits) + 1:
+                    print "The file seems broken, please check it."
+                    sys.exit(2)
+                pdos[j][k] = map(lambda x, y: x + y, pdos[j][k], temp[1:l])
+    return orbits, E, pdos
+
+
+def writeband(dir, klist, eigenvalues, efermi):
 #Write the band data to 'BANDS', in (k,E) format, if we set ISPIN=2, we will get 'BANDS_up' and 'BANDS_down'
     if len(eigenvalues) == 1:
         try:
-            f0 = open(os.path.abspath(dir)+os.path.sep+"bands","w")
+            f0 = open(os.path.abspath(dir)+os.path.sep+"bands.dat","w")
         except:
-            print "Can't open or create the 'bands' file"
+            print "Can't open or create the 'bands.dat' file"
             return 1
         f = [f0]
     elif len(eigenvalues) == 2:
         try:
-            f0 = open(os.path.abspath(dir)+os.path.sep+"bands-up","w")
-            f1 = open(os.path.abspath(dir)+os.path.sep+"bands-down","w")
+            f0 = open(os.path.abspath(dir)+os.path.sep+"bands-up.dat","w")
+            f1 = open(os.path.abspath(dir)+os.path.sep+"bands-down.dat","w")
         except:
-            print "Can't open or create the 'bands-up' and/or 'bands-down' file"
+            print "Can't open or create the 'bands-up.dat' and/or 'bands-down.dat' file"
             return 1
         printline()
         print "Warning: you calculate the spin up and down separately, so you will get two files."
@@ -278,23 +340,23 @@ def writeband(dir,klist,eigenvalues,efermi):
             for kpt in range(len(eigenvalues[spin])):
                 print >> f[spin], "%d\t%.10f\t%.10f" %(kpt + 1, klist[kpt], eigenvalues[spin][kpt][band] - efermi)
             print >> f[spin], ""
-    for i in range(len(f)):
-        f[i].close()
+    for i in f:
+        i.close()
     return 0
 
 
-def writeprojected(dir,klist,eigenvalues,projected,efermi):
+def writeprojected(dir, klist, eigenvalues, projected, efermi):
     if len(eigenvalues) == 1:
         try:
-            f0 = open(os.path.abspath(dir)+os.path.sep+"projs","w")
+            f0 = open(os.path.abspath(dir)+os.path.sep+"projs.dat","w")
         except:
             print "Can't open or create the 'projs' file"
             return 1
         f = [f0]
     elif len(eigenvalues) == 2:
         try:
-            f0 = open(os.path.abspath(dir)+os.path.sep+"projs-up","w")
-            f1 = open(os.path.abspath(dir)+os.path.sep+"projs-down","w")
+            f0 = open(os.path.abspath(dir)+os.path.sep+"projs-up.dat","w")
+            f1 = open(os.path.abspath(dir)+os.path.sep+"projs-down.dat","w")
         except:
             print "Can't open or create the 'projs-up' and/or 'projs-down' file"
             return 1
@@ -320,9 +382,87 @@ def writeprojected(dir,klist,eigenvalues,projected,efermi):
                 else:
                     print >> f[spin], "%d\t%.10f\t%.10f\t%.10f" %(kpt + 1, klist[kpt], eigenvalues[spin][kpt][band] - efermi, projected[spin][kpt][band])
             print >> f[spin], ""
-    for i in range(len(f)):
-        f[i].close()
+    for i in f:
+        i.close()
     return 0              
+
+
+def writedos(dir, dos, efermi):
+    if len(dos) == 1:
+        try:
+            f0 = open(os.path.abspath(dir)+os.path.sep+"dos.dat","w")
+        except:
+            print "Can't open or create the 'dos.dat' file"
+            return 1
+        f = [f0]
+    elif len(dos) == 2:
+        try:
+            f0 = open(os.path.abspath(dir)+os.path.sep+"dos-up.dat","w")
+            f1 = open(os.path.abspath(dir)+os.path.sep+"dos-down.dat","w")
+        except:
+            print "Can't open or create the 'dos-up.dat' and/or 'dos-down.dat' file"
+            return 1
+        printline()
+        print "Warning: you calculate the spin up and down separately, so you will get two files."
+        f = [f0 , f1]
+    else:
+        print "There are more than two type of spin is calculated, please check the file."
+        return 2
+    for spin in range(len(dos)):
+        for E in dos[spin]:
+            print >> f[spin], "%.10f\t%.10f\t%.10f" %(E[0] - efermi, E[1], E[2])
+    for i in f:
+        i.close()
+    return 0
+
+
+def writepdos(dir, orbits, E, pdos, efermi):
+    if len(pdos) == 1:
+        try:
+            f0 = open(os.path.abspath(dir)+os.path.sep+"pdos.dat","w")
+        except:
+            print "Can't open or create the 'dos' file"
+            return 1
+        f = [f0]
+    elif len(pdos) == 2:
+        try:
+            f0 = open(os.path.abspath(dir)+os.path.sep+"pdos-up.dat","w")
+            f1 = open(os.path.abspath(dir)+os.path.sep+"pdos-down.dat","w")
+        except:
+            print "Can't open or create the 'pdos-up.dat' and/or 'pdos-down.dat' file"
+            return 1
+        printline()
+        print "Warning: you calculate the spin up and down separately, so you will get two files."
+        f = [f0 , f1]
+    elif len(pdos) == 4:
+        try:
+            f0 = open(os.path.abspath(dir)+os.path.sep+"pdos.dat","w")
+            f1 = open(os.path.abspath(dir)+os.path.sep+"pdos-mx.dat","w")
+            f2 = open(os.path.abspath(dir)+os.path.sep+"pdos-my.dat","w")
+            f3 = open(os.path.abspath(dir)+os.path.sep+"pdos-mz.dat","w")
+        except:
+            print "Can't open or create the 'pdos.dat' and/or 'pdos-m[x/y/z].dat' file"
+            return 1
+        printline()
+        print "Warning: you calculate is non-collinear, so you will get four files."
+        f = [f0 , f1, f2, f3]
+    else:
+        print "Please chek your file, maybe it is borken."
+        return 1
+    for i in range(len(f)):
+        string = "#E"
+        for j in orbits:
+            string += "\t{}".format(j)
+        print >> f[i], "{}\ttotal".format(string)
+        for j in range(len(pdos[i])):
+            string = "{:.10f}".format(E[j] - ef)
+            for k in pdos[i][j]:
+                string += "\t{:.10f}".format(k)
+            string += "\t{:10f}".format(sum(pdos[i][j]))
+            print >> f[i], string
+    for i in f:
+        i.close()
+    return 0     
 
 
 printline()
@@ -410,7 +550,7 @@ if Jband == 1:
     k = calculatek(dir, kpt, rcb)
     E = geteigenvalues(Modeling)
     if Modeling.find("calculation").find("projected") != None:
-        sure = raw_input("It seems your calculation caotains the projected information, do you want to ou0tput them [Yes/no]:").strip()
+        sure = raw_input("It seems your calculation caotains the projected information, do you want to output them [Yes/no]:").strip()
         if sure == "" or sure[0] == "Y" or sure[0] == "y":
             proj = getprojected(Modeling)
             writeprojected(dir, k, E, proj, ef)
@@ -421,9 +561,12 @@ if Jband == 1:
 if Jdos == 1:
     printline()
     print "Density of states"
-    print "Do no thing until now."
+    dos = getdos(Modeling)
+    writedos(dir, dos, ef)
+    orbits, E, pdos = getpdos(Modeling)
+    writepdos(dir, orbits, E, pdos, ef)
     printline()
 
 printline()
-print "All jobs have been done, exit now."
+print "All jobs havs been done, exit now."
 printline()
