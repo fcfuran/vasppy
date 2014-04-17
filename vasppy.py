@@ -56,12 +56,12 @@ def calculatek(dir, kpointlist, rec_basis):
         sys.exit(3)
     klist = [0] * len(kpointlist)
     coord1 = rec2car(kpointlist[0], rec_basis)
-    print >> f, "%d\t%.10f\t%.10f\t%.10f\t%.10f\t%.10f\t%.10f" %(1, kpointlist[0][0], kpointlist[0][1], kpointlist[0][2], coord1[0], coord1[1], coord1[2])
+    print >> f, "{:d}\t{:.6f}\t{:.6f}\t{:.6f}\t{:.6f}\t{:.6f}\t{:.6f}".format(1, kpointlist[0][0], kpointlist[0][1], kpointlist[0][2], coord1[0], coord1[1], coord1[2])
     for i in range(1,len(kpointlist)):
         coord2 = rec2car(kpointlist[i], rec_basis)
         klist[i] = klist[i-1] + math.sqrt(sum(map(lambda x, y: pow(x - y, 2), coord2, coord1)))
         coord1 = coord2
-        print >> f, "%d\t%.10f\t%.10f\t%.10f\t%.10f\t%.10f\t%.10f" %(i + 1, kpointlist[i][0], kpointlist[i][1], kpointlist[i][2], coord1[0], coord1[1], coord1[2])
+        print >> f, "{:d}\t{:.6f}\t{:.6f}\t{:.6f}\t{:.6f}\t{:.6f}\t{:.6f}".format(i + 1, kpointlist[i][0], kpointlist[i][1], kpointlist[i][2], coord1[0], coord1[1], coord1[2])
     f.close()
     return map(lambda x: x/klist[-1], klist)
 
@@ -302,13 +302,14 @@ def getpdos(Modeling):
         if i == atomselect[0]:
             continue
         for j in range(len(Set[i])):
-            for k in range(len(E[j])):
+            for k in range(len(Set[i][j])):
                 temp = map(float, Set[i][j][k].text.split())
                 l = len(temp)
                 if l != len(orbits) + 1:
                     print "The file seems broken, please check it."
                     sys.exit(2)
-                pdos[j][k] = map(lambda x, y: x + y, pdos[j][k], temp[1:l])
+                for m in range(len(pdos[j][k])):
+                    pdos[j][k][m] += temp[m + 1]
     return orbits, E, pdos
 
 
@@ -340,7 +341,7 @@ def writeband(dir, klist, eigenvalues, efermi):
             return 2
         for band in range(len(eigenvalues[spin][0])):
             for kpt in range(len(eigenvalues[spin])):
-                print >> f[spin], "%d\t%.10f\t%.10f" %(kpt + 1, klist[kpt], eigenvalues[spin][kpt][band] - efermi)
+                print >> f[spin], "{:d}\t{:.6f}\t{:.6f}".format(kpt + 1, klist[kpt], eigenvalues[spin][kpt][band] - efermi)
             print >> f[spin], ""
     for i in f:
         i.close()
@@ -380,9 +381,9 @@ def writeprojected(dir, klist, eigenvalues, projected, efermi):
         for band in range(len(eigenvalues[spin][0])):
             for kpt in range(len(eigenvalues[spin])):
                 if noncol == 1:
-                    print >> f[0], "%d\t%.10f\t%.10f\t%.10f\t%.10f\t%.10f\t%.10f" %(kpt + 1, klist[kpt], eigenvalues[0][kpt][band] - efermi, projected[0][kpt][band], projected[1][kpt][band], projected[2][kpt][band], projected[3][kpt][band])
+                    print >> f[0], "{:d}\t{:.6f}\t{:.6f}\t{:.6f}\t{:.6f}\t{:.6f}\t{:.6f}".format(kpt + 1, klist[kpt], eigenvalues[0][kpt][band] - efermi, projected[0][kpt][band], projected[1][kpt][band], projected[2][kpt][band], projected[3][kpt][band])
                 else:
-                    print >> f[spin], "%d\t%.10f\t%.10f\t%.10f" %(kpt + 1, klist[kpt], eigenvalues[spin][kpt][band] - efermi, projected[spin][kpt][band])
+                    print >> f[spin], "{:d}\t{:.6f}\t{:.6f}\t{:.6f}".format(kpt + 1, klist[kpt], eigenvalues[spin][kpt][band] - efermi, projected[spin][kpt][band])
             print >> f[spin], ""
     for i in f:
         i.close()
@@ -412,7 +413,7 @@ def writedos(dir, dos, efermi):
         return 2
     for spin in range(len(dos)):
         for E in dos[spin]:
-            print >> f[spin], "%.10f\t%.10f\t%.10f" %(E[0] - efermi, E[1], E[2])
+            print >> f[spin], "{:.6f}\t{:.6f}\t{:.6f}".format(E[0] - efermi, E[1], E[2])
     for i in f:
         i.close()
     return 0
@@ -457,10 +458,10 @@ def writepdos(dir, orbits, E, pdos, efermi):
             string += "\t{}".format(j)
         print >> f[i], "{}\ttotal".format(string)
         for j in range(len(pdos[i])):
-            string = "{:.10f}".format(E[i][j] - ef)
+            string = "{:.6f}".format(E[i][j] - ef)
             for k in pdos[i][j]:
-                string += "\t{:.10f}".format(k)
-            string += "\t{:10f}".format(sum(pdos[i][j]))
+                string += "\t{:.6f}".format(k)
+            string += "\t{:.6f}".format(sum(pdos[i][j]))
             print >> f[i], string
     for i in f:
         i.close()
@@ -565,8 +566,9 @@ if Jdos == 1:
     print "Density of states"
     dos = getdos(Modeling)
     writedos(dir, dos, ef)
-    orbits, E, pdos = getpdos(Modeling)
-    writepdos(dir, orbits, E, pdos, ef)
+    if Modeling.find("calculation").find("dos").find("partial") != None:
+        orbits, E, pdos = getpdos(Modeling)
+        writepdos(dir, orbits, E, pdos, ef)
     printline()
 
 printline()
