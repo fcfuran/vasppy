@@ -7,7 +7,7 @@ It's just a small program to get data from vasprun.xml
 
 __author__ = "Meng Ye <yemeng77@gmail.com>"
 __licence__ = "GNU General Public License"
-__version__ = "0.0.0"
+__version__ = "0.0.1"
 
 import sys
 import os
@@ -131,33 +131,126 @@ def selectatoms(Modeling):
     sure = "no"
     printline()
     print "Atoms selection"
+    print "The sturcture has these atoms:"
+    for i in range(len(atoms)):
+        print "{:d}\t{:s}\t{:.10f}\t{:.10f}\t{:.10f}".format(i + 1,atoms[i],postions[i][0],postions[i][1],postions[i][2])
+    print "You can select the atoms to aggregate in these ways:"
+    print "[1] by number"
+    print "[2] by element"
+    print "[3] by fractional coordinate"
+    way = ""
+    while way == "":
+        way = raw_input("Which way do you wish to use:").strip()
+        if way != "1" and way != "2" and way != "3":
+            print "Your input '{:s}' is not accepted, please try again.".format(way)
+        else:
+            break
     while sure != "" and sure[0] != "Y" and sure[0] != "y":
-        while True:
-            print "The sturcture has these atoms:"
-            for i in range(len(atoms)):
-                print "%d\t%s\t%.10f\t%.10f\t%.10f" %(i + 1,atoms[i],postions[i][0],postions[i][1],postions[i][2])
-            string = raw_input("Please enter the number of the atoms you want to aggregate (0 for all):\n")
-            if string == "":
-                continue
+        if way == "1":
+            while True:
+                print "The sturcture has these atoms:"
+                for i in range(len(atoms)):
+                    print "{:d}\t{:s}\t{:.10f}\t{:.10f}\t{:.10f}".format(i + 1,atoms[i],postions[i][0],postions[i][1],postions[i][2])
+                string = raw_input("Please enter the number of the atoms you want to aggregate (0 for all):\n")
+                if string == "":
+                    continue
+                else:
+                    try:
+                        atomselect = list(set(map(int,string.split())))
+                    except:
+                        print "Your input '{:s}' is not accepted, please try again.".format(string)
+                        continue
+                break
+            atomselect.sort()
+            if atomselect[0] == 0:
+                atomselect = range(len(atoms))
             else:
+                l = len(atomselect)
+                while atomselect[l - 1] > len(atoms):
+                    l -= 1
+                    atomselect = atomselect[0:l]
+                atomselect = map(lambda x: x - 1, atomselect)
+        if way == "2":
+            elementinfo = [atoms[0]]
+            elements = []
+            element =[]
+            for i in range(len(atoms)):
+                if atoms[i] != elementinfo[-1]:
+                    elements.append(element)
+                    element = []
+                    elementinfo.append(atoms[i])
+                element.append(i) 
+            elements.append(element)
+            while True:
+                print "The sturcture has these elements:"
+                for i in range(len(elementinfo)):
+                    print "{:d}\t{:s}".format(i + 1,elementinfo[i])
+                string = raw_input("Please enter the number of the elements you want to aggregate (0 for all):\n")
+                if string == "":
+                    continue
+                else:
+                    try:
+                        elementselect = list(set(map(int,string.split())))
+                    except:
+                        print "Your input '{:s}' is not accepted, please try again.".format(string)
+                        continue
+                break
+            elementselect.sort()
+            if elementselect[0] == 0:
+                elementselect = range(len(elementinfo))
+            else:
+                l = len(elementselect)
+                while elementselect[l - 1] > len(elementinfo):
+                    l -= 1
+                    elementselect = elementselect[0:l]
+                elementselect = map(lambda x: x - 1, elementselect)
+            atomselect = []
+            for i in elementselect:
+                atomselect.extend(elements[i])
+        if way == "3":
+            while True:
                 try:
-                    atomselect = list(set(map(int,string.split())))
+                    direction = int(raw_input("Which direction do you want to use (1-a, 2-b, 3-c):"))
                 except:
-                    print "Your input '%s' is not accepted, please try again." %(string)
+                    print "Your input is not accepted, please try again."
+                    continue
+                if direction < 1 or direction > 3:
+                    print "Your input is not accepted, please try again."
                     continue
                 break
-        atomselect.sort()
-        if atomselect[0] == 0:
-            atomselect = range(len(atoms))
-        else:
-            l = len(atomselect)
-            while atomselect[l - 1] > len(atoms):
-                l -= 1
-            atomselect = atomselect[0:l]
-            atomselect = map(lambda x: x - 1, atomselect)
+            direction -= 1
+            axis = ["a","b","c"]
+            while True:
+                string = ""
+                while string == "":
+                    string = raw_input("Plese input the max and min fractional coordinate in {:s}-direction:".format(axis[direction]))
+                try:
+                    coordinate = map(float,string.split())
+                except:
+                    print "Your input is not accepted, please try again."
+                    continue 
+                if len(coordinate) != 2:
+                    print "Your input is not accepted, please try again."
+                    continue
+                dmax = max(coordinate)
+                dmin = min(coordinate)
+                if dmax > 1:
+                    print "The max value is larger than 1, please try again."
+                    continue
+                if dmax < 0:
+                    print "The min value is less than 0, please try again."
+                    continue
+                break
+            atomselect= []
+            for i in range(len(postions)):
+                if postions[i][direction] <= dmax and postions[i][direction] >= dmin:
+                    atomselect.append(i)
+            if not atomselect:
+                print "You should select at least one atom."
+                continue
         print "\nThe atoms you select are:"
         for i in atomselect:
-            print "%d\t%s\t%.10f\t%.10f\t%.10f" %(i + 1,atoms[i],postions[i][0],postions[i][1],postions[i][2])
+            print "{:d}\t{:s}\t{:.10f}\t{:.10f}\t{:.10f}".format(i + 1,atoms[i],postions[i][0],postions[i][1],postions[i][2])
         sure = raw_input("is that right? [Yes/no]:").strip()
     return atomselect
 
@@ -458,7 +551,7 @@ def writepdos(dir, orbits, E, pdos, efermi):
             string += "\t{}".format(j)
         print >> f[i], "{}\ttotal".format(string)
         for j in range(len(pdos[i])):
-            string = "{:.6f}".format(E[i][j] - ef)
+            string = "{:.6f}".format(E[i][j] - efermi)
             for k in pdos[i][j]:
                 string += "\t{:.6f}".format(k)
             string += "\t{:.6f}".format(sum(pdos[i][j]))
@@ -468,109 +561,116 @@ def writepdos(dir, orbits, E, pdos, efermi):
     return 0     
 
 
-printline()
-while True:
-    dir = raw_input("Please input the directory which cotains the file you want to deal [Enter for the current]:\n").strip()
-    if dir == "":
-        dir = "."
-    Modeling = readvasprun(dir)
-    if Modeling == None:
-        print "No file named 'vasprun.xml' in directory '%s' or it is broken, please try again." %(dir)
-    else:
-        printline()
-        break
-
-printline()
-print "Fermi level correction"
-print "Your can use the following options:"
-print "[1] Without any fermi level correction,"
-print "[2] Read the Fermi level from another 'vasprun.xml' file."
-print "[3] Manuelly input a value."
-string  = raw_input("Which one do you want (if you input other value, we will read Fermi level from this file):").strip()
-if string == "1":
-    ef = 0.0
-elif string == "2":
-    while True:
-        dir1 = raw_input("Please input the directory which cotains the 'vsprun.xml' file'[Enter for '..']::\n").strip()
-        if dir1 == "":
-            dir1 = ".."
-        Modeling1 = readvasprun(dir1)
-        if Modeling1 == None:
-            print "No file named 'vasprun.xml' in directory '%s' or it is broken, please try again." %(dir1)
-        else:
-            try:
-                ef = getefermi(Modeling1)
-            except:
-                ef = 0
-            break
-elif string == "3":
-    while True:
-        try:
-            ef = float(raw_input("Please input the Fermi level:").strip())
-        except:
-            print "Your input are not acceptable, please try again."
-            continue
-        break
-else:
-    try:
-        ef = getefermi(Modeling)
-    except:
-        ef = 0.0
-print "The Fermi level of your system is %.10f eV." %(ef)
-printline()
-
-printline()
-print "Job selection"
-Jband = 0
-Jdos = 0
-while True:
-    print "This script can get these data:"
-    print "[1] Band sturcture"
-    print "[2] Density of states"
-    string = ""
-    while string == "":
-        string = raw_input("Please input what you want to do (0 for both):").strip()
-    jobselect = string.split()
-    if "1" in jobselect:
-        Jband = 1
-    if "2" in jobselect:
-        Jdos = 1
-    if "0" in jobselect:
-        Jband = 1
-        Jdos = 1
-    if Jband == 0 and Jdos == 0:
-        print "You do not select any job, try again." 
-    else:
-        break
-printline()
-
-if Jband == 1:
+def main():
     printline()
-    print "Band struture"
-    kpt = getkpointlist(Modeling)
-    print "Your calculation use %d k-points" %(len(kpt))
-    rcb = getrecbasis(Modeling)
-    k = calculatek(dir, kpt, rcb)
-    E = geteigenvalues(Modeling)
-    if Modeling.find("calculation").find("projected") != None:
-        sure = raw_input("It seems your calculation caotains the projected information, do you want to output them [Yes/no]:").strip()
-        if sure == "" or sure[0] == "Y" or sure[0] == "y":
-            proj = getprojected(Modeling)
-            writeprojected(dir, k, E, proj, ef)
+    while True:
+        dir = raw_input("Please input the directory which cotains the file you want to deal [Enter for the current]:\n").strip()
+        if dir == "":
+            dir = "."
+        Modeling = readvasprun(dir)
+        if Modeling == None:
+            print "No file named 'vasprun.xml' in directory '%s' or it is broken, please try again." %(dir)
         else:
-            writeband(dir, k, E, ef)
+            printline()
+            break
+    
+    printline()
+    print "Fermi level correction"
+    print "Your can use the following options:"
+    print "[1] Without any fermi level correction,"
+    print "[2] Read the Fermi level from another 'vasprun.xml' file."
+    print "[3] Manuelly input a value."
+    string  = raw_input("Which one do you want (if you input other value, we will read Fermi level from this file):").strip()
+    if string == "1":
+        ef = 0.0
+    elif string == "2":
+        while True:
+            dir1 = raw_input("Please input the directory which cotains the 'vsprun.xml' file'[Enter for '..']::\n").strip()
+            if dir1 == "":
+                dir1 = ".."
+            Modeling1 = readvasprun(dir1)
+            if Modeling1 == None:
+                print "No file named 'vasprun.xml' in directory '%s' or it is broken, please try again." %(dir1)
+            else:
+                try:
+                    ef = getefermi(Modeling1)
+                except:
+                    ef = 0
+                break
+    elif string == "3":
+        while True:
+            try:
+                ef = float(raw_input("Please input the Fermi level:").strip())
+            except:
+                print "Your input are not acceptable, please try again."
+                continue
+            break
+    else:
+        try:
+            ef = getefermi(Modeling)
+        except:
+            ef = 0.0
+    print "The Fermi level of your system is %.10f eV." %(ef)
     printline()
     
-if Jdos == 1:
     printline()
-    print "Density of states"
-    dos = getdos(Modeling)
-    writedos(dir, dos, ef)
-    if Modeling.find("calculation").find("dos").find("partial") != None:
-        orbits, E, pdos = getpdos(Modeling)
-        writepdos(dir, orbits, E, pdos, ef)
+    print "Job selection"
+    Jband = 0
+    Jdos = 0
+    while True:
+        print "This script can get these data:"
+        print "[1] Band sturcture"
+        print "[2] Density of states"
+        string = ""
+        while string == "":
+            string = raw_input("Please input what you want to do (0 for both):").strip()
+        jobselect = string.split()
+        if "1" in jobselect:
+            Jband = 1
+        if "2" in jobselect:
+            Jdos = 1
+        if "0" in jobselect:
+            Jband = 1
+            Jdos = 1
+        if Jband == 0 and Jdos == 0:
+            print "You do not select any job, try again." 
+        else:
+            break
+    printline()
+    
+    if Jband == 1:
+        printline()
+        print "Band struture"
+        kpt = getkpointlist(Modeling)
+        print "Your calculation use %d k-points" %(len(kpt))
+        rcb = getrecbasis(Modeling)
+        k = calculatek(dir, kpt, rcb)
+        E = geteigenvalues(Modeling)
+        if Modeling.find("calculation").find("projected") != None:
+            sure = raw_input("It seems your calculation caotains the projected information, do you want to output them [Yes/no]:").strip()
+            if sure == "" or sure[0] == "Y" or sure[0] == "y":
+                proj = getprojected(Modeling)
+                writeprojected(dir, k, E, proj, ef)
+            else:
+                writeband(dir, k, E, ef)
+        printline()
+        
+    if Jdos == 1:
+        printline()
+        print "Density of states"
+        dos = getdos(Modeling)
+        writedos(dir, dos, ef)
+        if Modeling.find("calculation").find("dos").find("partial") != None:
+            sure = raw_input("It seems your calculation caotains the projected information, do you want to output them [Yes/no]:").strip()
+            if sure == "" or sure[0] == "Y" or sure[0] == "y":
+                orbits, E, pdos = getpdos(Modeling)
+                writepdos(dir, orbits, E, pdos, ef)
+        printline()
+    
+    printline()
+    print "All jobs havs been done, exit now."
     printline()
 
-printline()
-print "All jobs havs been done, exit now."
-printline()
+
+if __name__ == '__main__':
+    main()
