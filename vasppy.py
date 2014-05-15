@@ -2,7 +2,7 @@
 # -*-coding:utf-8 -*-
 
 """
-It's just a small program to get data from vasprun.xml
+It's just a small program to process the band and/or dos data in 'vasprun.xml' file
 """
 
 __author__ = "Meng Ye <yemeng77@gmail.com>"
@@ -12,7 +12,11 @@ __version__ = "0.0.1"
 import sys
 import os
 import math
-import xml.etree.cElementTree as ET
+try:
+    import xml.etree.cElementTree as ET
+except ImportError:
+    import xml.etree.ElementTree as ET
+
 
 def printline():
     try:
@@ -20,15 +24,7 @@ def printline():
     except:
         columns = 80
     print "".join(["="] * columns)
-
-
-def readvasprun(dir):
-#Read dir/vasprun.xml file, and sore it in a cElemetTree.
-    try:
-        Modeling = ET.parse(os.path.abspath(dir)+os.path.sep+"vasprun.xml").getroot()
-    except:
-        return None
-    return Modeling
+    return 0
 
 
 def search(Tree, attrib, value):
@@ -47,10 +43,10 @@ def rec2car(kpoint, rec_basis):
     return coord
 
 
-def calculatek(dir, kpointlist, rec_basis):
+def calculatek(directory, kpointlist, rec_basis):
 #Calaulate the rael k to plot the band structure.
     try:
-        f = open(os.path.abspath(dir)+os.path.sep+"kpoints.dat","w")
+        f = open(os.path.abspath(directory)+os.path.sep+"kpoints.dat","w")
     except:
         print "Can't open or create the 'kpoints.dat' file"
         sys.exit(3)
@@ -66,91 +62,30 @@ def calculatek(dir, kpointlist, rec_basis):
     return map(lambda x: x/klist[-1], klist)
 
 
-def getatoms(Modeling):
-#Get the type of all atoms in the crystal from vasprun.xml, and store it in a list.
-    Atominfo = Modeling.find("atominfo")
-    Atoms = search(Atominfo,"name","atoms")
-    Set = Atoms.find("set")
-    atoms = []
-    for i in range(len(Set)):
-        atoms.append(Set[i][0].text.strip())
-    return atoms
-    
-
-def getrecbasis(Modeling):
-#Get the reciprocal basis of the crystal from vasprun.xml, and store it in a list.
-    Crystal = search(Modeling,"name","finalpos").find("crystal")
-    Rec_basis = search(Crystal,"name","rec_basis")
-    rec_basis = []
-    for i in range(3):
-        temp = map(float, Rec_basis[i].text.split())
-        if type(temp) == list and len(temp) == 3:
-            rec_basis.append(temp)
-        else:
-            print "Cannot get the reciprocal basis, please check the file."
-            sys.exit(2)
-    return(rec_basis)
-
-
-def getpositions(Modeling):
-#Get the positions of all atoms in the crystal from vasprun.xml, and store it in a list. 
-    Structure = search(Modeling,"name","finalpos")
-    Positions = search(Structure,"name","positions")
-    positions = []
-    for i in range(len(Positions)):
-        temp = map(float, Positions[i].text.split())
-        if type(temp) == list and len(temp) == 3:
-            positions.append(temp)
-        else:
-            print "Cannot get the posistion of the %dth atom, please check the file." %(i + 1)
-            sys.exit(2)    
-    return positions
-
-
-def getparameter(Modeling, name):
-    Parameter = Modeling.find("parameters")
-    for i in Parameter.iter("i"):
-        if i.get("name") == name:
-            return i.text.strip()
-    return ""
-        
-
-def getkpointlist(Modeling):
-#Get the coordinate of k-points from vasprun.xml, and store it in a list.
-    Kpoints = Modeling.find("kpoints")
-    Kpointlist = search(Kpoints,"name","kpointlist")
-    kpointlist = []
-    for i in range(len(Kpointlist)):
-        kpointlist.append(map(float, Kpointlist[i].text.split()))
-    return kpointlist
-
-
-def selectatoms(Modeling):
-    atoms = getatoms(Modeling)
-    postions = getpositions(Modeling)
+def selectatoms(atomnames, atompositions):
     sure = "no"
     printline()
     print "Atoms selection"
     print "The sturcture has these atoms:"
-    for i in range(len(atoms)):
-        print "{:d}\t{:s}\t{:.10f}\t{:.10f}\t{:.10f}".format(i + 1,atoms[i],postions[i][0],postions[i][1],postions[i][2])
+    for i in range(len(atomnames)):
+        print "{:d}\t{:s}\t{:.6f}\t{:.6f}\t{:.6f}".format(i + 1,atomnames[i], atompositions[i][0], atompositions[i][1], atompositions[i][2])
     print "You can select the atoms to aggregate in these ways:"
     print "[1] by number"
     print "[2] by element"
     print "[3] by fractional coordinate"
     way = ""
-    while way == "":
+    while True:
         way = raw_input("Which way do you wish to use:").strip()
-        if way != "1" and way != "2" and way != "3":
+        if way not in ["1","2","3"]:
             print "Your input '{:s}' is not accepted, please try again.".format(way)
         else:
             break
-    while sure != "" and sure[0] != "Y" and sure[0] != "y":
+    while sure and sure[0] not in ["Y","y"]:
         if way == "1":
             while True:
                 print "The sturcture has these atoms:"
-                for i in range(len(atoms)):
-                    print "{:d}\t{:s}\t{:.10f}\t{:.10f}\t{:.10f}".format(i + 1,atoms[i],postions[i][0],postions[i][1],postions[i][2])
+                for i in range(len(atomnames)):
+                    print "{:d}\t{:s}\t{:.6f}\t{:.6f}\t{:.6f}".format(i + 1,atomnames[i], atompositions[i][0], atompositions[i][1], atompositions[i][2])
                 string = raw_input("Please enter the number of the atoms you want to aggregate (0 for all):\n")
                 if string == "":
                     continue
@@ -161,24 +96,24 @@ def selectatoms(Modeling):
                         print "Your input '{:s}' is not accepted, please try again.".format(string)
                         continue
                 break
-            atomselect.sort()
-            if atomselect[0] == 0:
-                atomselect = range(len(atoms))
+            if 0 in atomselect:
+                atomselect = range(len(atomnames))
             else:
+                atomselect.sort()
                 l = len(atomselect)
-                while atomselect[l - 1] > len(atoms):
+                while atomselect[l - 1] > len(atomnames):
                     l -= 1
                     atomselect = atomselect[0:l]
                 atomselect = map(lambda x: x - 1, atomselect)
         if way == "2":
-            elementinfo = [atoms[0]]
+            elementinfo = [atomnames[0]]
             elements = []
             element =[]
-            for i in range(len(atoms)):
-                if atoms[i] != elementinfo[-1]:
+            for i in range(len(atomnames)):
+                if atomnames[i] != elementinfo[-1]:
                     elements.append(element)
                     element = []
-                    elementinfo.append(atoms[i])
+                    elementinfo.append(atomnames[i])
                 element.append(i) 
             elements.append(element)
             while True:
@@ -194,11 +129,11 @@ def selectatoms(Modeling):
                     except:
                         print "Your input '{:s}' is not accepted, please try again.".format(string)
                         continue
-                break
-            elementselect.sort()
-            if elementselect[0] == 0:
+                break            
+            if 0 in elementselect:
                 elementselect = range(len(elementinfo))
             else:
+                elementselect.sort()
                 l = len(elementselect)
                 while elementselect[l - 1] > len(elementinfo):
                     l -= 1
@@ -214,7 +149,7 @@ def selectatoms(Modeling):
                 except:
                     print "Your input is not accepted, please try again."
                     continue
-                if direction < 1 or direction > 3:
+                if direction not in [1,2,3]:
                     print "Your input is not accepted, please try again."
                     continue
                 break
@@ -242,15 +177,15 @@ def selectatoms(Modeling):
                     continue
                 break
             atomselect= []
-            for i in range(len(postions)):
-                if postions[i][direction] <= dmax and postions[i][direction] >= dmin:
+            for i in range(len(atompositions)):
+                if atompositions[i][direction] <= dmax and atompositions[i][direction] >= dmin:
                     atomselect.append(i)
             if not atomselect:
-                print "You should select at least one atom."
+                print "No atom was selected, you should select at least one atom."
                 continue
         print "\nThe atoms you select are:"
         for i in atomselect:
-            print "{:d}\t{:s}\t{:.10f}\t{:.10f}\t{:.10f}".format(i + 1,atoms[i],postions[i][0],postions[i][1],postions[i][2])
+            print "{:d}\t{:s}\t{:.6f}\t{:.6f}\t{:.6f}".format(i + 1,atomnames[i], atompositions[i][0], atompositions[i][1], atompositions[i][2])
         sure = raw_input("is that right? [Yes/no]:").strip()
     return atomselect
 
@@ -259,166 +194,222 @@ def selectorbits(orbits):
     sure = "no"
     printline()
     print "Orbits selection"
-    while sure != "" and sure[0] != "Y" and sure[0] != "y":
+    while sure and sure[0] not in ["Y","y"]:
         while True:
             print "Projected to these orbits are calculated:"
             for i in range(len(orbits)):
-                print "%d\t%s" %(i + 1,orbits[i])
+                print "{:d}\t{:s}".format(i + 1,orbits[i])
             string = raw_input("Please enter the number of the orbits you want to aggregate (0 for all):\n")
-            if string == "":
+            if not string:
                 continue
             else:
                 try:
                     orbitselect = list(set(map(int,string.split())))
                 except:
-                    print "Your input '%s' is not accepted, please try again." %(string)
+                    print "Your input '{:s}' is not accepted, please try again.".format(string)
                     continue
                 break
-        orbitselect.sort()
-        if orbitselect[0] == 0:
+        if 0 in orbitselect:
             orbitselect = range(len(orbits))
         else:
+            orbitselect.sort()
             l = len(orbitselect)
             while orbitselect[l - 1] > len(orbits):
                 l -= 1
             orbitselect = orbitselect[0:l]
             orbitselect = map(lambda x: x - 1, orbitselect)
-        print "The orbits you select are:"
+        print "\nThe orbits you select are:"
         for i in orbitselect:
-            print "%d\t%s" %(i + 1,orbits[i])
+            print "{:d}\t{:s}".format(i + 1,orbits[i])
         sure = raw_input("is that right? [Yes/no]:").strip()
     return orbitselect
 
 
-def getefermi(Modeling):
-#Get the Fermi energy from vasprun.xml
-    DOS = Modeling.find("calculation").find("dos")
-    efermi = float(search(DOS,"name","efermi").text)
-    return efermi
+class VASPrun:
+    def __init__(self, directory = "."):
+        try:
+            self.Modeling = ET.parse(os.path.abspath(directory)+os.path.sep+"vasprun.xml").getroot()
+        except:
+            self.Modeling = None
 
-
-def geteigenvalues(Modeling):
-#Get eigenvlues of each k-points from vasprun.xml, and store it in a list.
-    Eigenvalues = Modeling.find("calculation").find("eigenvalues")
-    Set = Eigenvalues.find("array").find("set")
-    eigenvalues = []
-    for i in range(len(Set)):
-        kpoints = []
-        for j in range(len(Set[i])):
-            band = []
-            for k in range(len(Set[i][j])):
-                band.append(float(Set[i][j][k].text.split()[0]))
-            kpoints.append(band)
-        eigenvalues.append(kpoints)
-    return eigenvalues
-
-
-def getprojected(Modeling):
-    Projected = Modeling.find("calculation").find("projected")
-    Array = Projected.find("array")
-    orbits = []
-    atomselect = selectatoms(Modeling)
-    for i in Array.findall("field"):
-        orbits.append(i.text.strip())
-    orbitselect = selectorbits(orbits)
-    Set = Array.find("set")
-    projected = []
-    for spin in Set:
-        spinproj = []
-        for kpoint in spin:
-            kproj = []
-            for band in kpoint:
-                weight = 0
-                for atom in atomselect:
-                    temp = 0
-                    w = map(float,band[atom].text.split())
-                    for orbit in orbitselect:
-                        temp += w[orbit]
-                    weight += temp
-                kproj.append(weight)
-            spinproj.append(kproj)
-        projected.append(spinproj)
-    return projected
-
-
-def getdos(Modeling):
-    Total = Modeling.find("calculation").find("dos").find("total")
-    if Total == None:
-        print "No DOS information found."
-        return []
-    Set = Total.find("array").find("set")
-    if len(Set) == 2:
-        l = 2
-    else:
-        l = 1
-    dos = []
-    for i in range(l):
-        spin = []
-        for r in Set[i]:
-            temp = map(float, r.text.split())
-            if len(temp) != 3:
-                print "The file seems borken,"
-                return []
-            spin.append(temp)
-        dos.append(spin)
-    return dos
-
-
-def getpdos(Modeling):
-    PDOS = Modeling.find("calculation").find("dos").find("partial")
-    Array = PDOS.find("array")
-    orbits = []
-    atomselect = selectatoms(Modeling)
-    for i in Array.findall("field"):
-        temp = i.text.strip()
-        if temp == "energy":
-            continue
-        orbits.append(temp)
-    Set = Array.find("set")
-    pdos = []
-    E = []
-    i = atomselect[0]
-    for j in Set[i]:
-        spin = []
-        E0 = []
-        for r in j:
-            temp = map(float, r.text.split())
-            l = len(temp)
-            if l != len(orbits) + 1:
-                print "The file seems broken, please check it."
+    def atomnames(self):
+    #Get the type of all atoms in the crystal from vasprun.xml, and store it in a list.
+        Atominfo = self.Modeling.find("atominfo")
+        Atoms = search(Atominfo,"name","atoms")
+        Set = Atoms.find("set")
+        atoms = []
+        for i in range(len(Set)):
+            atoms.append(Set[i][0].text.strip())
+        return atoms
+          
+    def recbasis(self):
+    #Get the reciprocal basis of the crystal from vasprun.xml, and store it in a list.
+        Crystal = search(self.Modeling,"name","finalpos").find("crystal")
+        Rec_basis = search(Crystal,"name","rec_basis")
+        rec_basis = []
+        for i in range(3):
+            temp = map(float, Rec_basis[i].text.split())
+            if type(temp) == list and len(temp) == 3:
+                rec_basis.append(temp)
+            else:
+                print "Cannot get the reciprocal basis, please check the file."
                 sys.exit(2)
-            E0.append(temp[0])
-            spin.append(temp[1:l])
-        pdos.append(spin)
-        E.append(E0)
-    for i in atomselect:
-        if i == atomselect[0]:
-            continue
-        for j in range(len(Set[i])):
-            for k in range(len(Set[i][j])):
-                temp = map(float, Set[i][j][k].text.split())
+        return rec_basis
+    
+    def atompositions(self):
+    #Get the positions of all atoms in the crystal from vasprun.xml, and store it in a list. 
+        Structure = search(self.Modeling,"name","finalpos")
+        Positions = search(Structure,"name","positions")
+        positions = []
+        for i in range(len(Positions)):
+            temp = map(float, Positions[i].text.split())
+            if type(temp) == list and len(temp) == 3:
+                positions.append(temp)
+            else:
+                print "Cannot get the posistion of the {:d}th atom, please check the file.".format(i + 1)
+                sys.exit(2)    
+        return positions
+       
+    def parameter(self, name):
+        Parameter = self.Modeling.find("parameters")
+        for i in Parameter.iter("i"):
+            if i.get("name") == name:
+                return i.text.strip()
+        return ""
+    
+    def kpointlist(self):
+    #Get the coordinate of k-points from vasprun.xml, and store it in a list.
+        Kpoints = self.Modeling.find("kpoints")
+        Kpointlist = search(Kpoints,"name","kpointlist")
+        kpointlist = []
+        for i in range(len(Kpointlist)):
+            kpointlist.append(map(float, Kpointlist[i].text.split()))
+        return kpointlist 
+    
+    def efermi(self):
+    #Get the Fermi energy from vasprun.xml
+        DOS = self.Modeling.find("calculation").find("dos")
+        return float(search(DOS,"name","efermi").text)
+        
+    def eigenvalues(self):
+    #Get eigenvlues of each k-points from vasprun.xml, and store it in a list.
+        Eigenvalues = self.Modeling.find("calculation").find("eigenvalues")
+        Set = Eigenvalues.find("array").find("set")
+        eigen = []
+        for i in range(len(Set)):
+            kpoints = []
+            for j in range(len(Set[i])):
+                band = []
+                for k in range(len(Set[i][j])):
+                    band.append(float(Set[i][j][k].text.split()[0]))
+                kpoints.append(band)
+            eigen.append(kpoints)
+        return eigen
+       
+    def projected(self):
+        Projected = self.Modeling.find("calculation").find("projected")
+        Array = Projected.find("array")
+        orbits = []
+        atomselect = selectatoms(self.atomnames(), self.atompositions())
+        for i in Array.findall("field"):
+            orbits.append(i.text.strip())
+        orbitselect = selectorbits(orbits)
+        Set = Array.find("set")
+        projdata = []
+        for spin in Set:
+            spinproj = []
+            for kpoint in spin:
+                kproj = []
+                for band in kpoint:
+                    weight = 0
+                    for atom in atomselect:
+                        temp = 0
+                        w = map(float,band[atom].text.split())
+                        for orbit in orbitselect:
+                            temp += w[orbit]
+                        weight += temp
+                    kproj.append(weight)
+                spinproj.append(kproj)
+            projdata.append(spinproj)
+        return projdata
+        
+    def dos(self):
+        Total = self.Modeling.find("calculation").find("dos").find("total")
+        if Total == None:
+            print "No DOS information found."
+            return []
+        Set = Total.find("array").find("set")
+        if len(Set) == 2:
+            l = 2
+        else:
+            l = 1
+        dosdata = []
+        for i in range(l):
+            spin = []
+            for r in Set[i]:
+                temp = map(float, r.text.split())
+                if len(temp) != 3:
+                    print "The file seems borken,"
+                    return []
+                spin.append(temp)
+            dosdata.append(spin)
+        return dosdata
+      
+    def pdos(self):
+        PDOS = self.Modeling.find("calculation").find("dos").find("partial")
+        Array = PDOS.find("array")
+        orbits = []
+        atomselect = selectatoms(self.atomnames(), self.atompositions())
+        for i in Array.findall("field"):
+            temp = i.text.strip()
+            if temp == "energy":
+                continue
+            orbits.append(temp)
+        Set = Array.find("set")
+        pdosdata = []
+        E = []
+        i = atomselect[0]
+        for j in Set[i]:
+            spin = []
+            E0 = []
+            for r in j:
+                temp = map(float, r.text.split())
                 l = len(temp)
                 if l != len(orbits) + 1:
                     print "The file seems broken, please check it."
                     sys.exit(2)
-                for m in range(len(pdos[j][k])):
-                    pdos[j][k][m] += temp[m + 1]
-    return orbits, E, pdos
+                E0.append(temp[0])
+                spin.append(temp[1:l])
+            pdosdata.append(spin)
+            E.append(E0)
+        for i in atomselect:
+            if i == atomselect[0]:
+                continue
+            for j in range(len(Set[i])):
+                for k in range(len(Set[i][j])):
+                    temp = map(float, Set[i][j][k].text.split())
+                    l = len(temp)
+                    if l != len(orbits) + 1:
+                        print "The file seems broken, please check it."
+                        sys.exit(2)
+                    for m in range(len(pdosdata[j][k])):
+                        pdosdata[j][k][m] += temp[m + 1]
+        return orbits, E, pdosdata
 
-
-def writeband(dir, klist, eigenvalues, efermi):
+              
+def writeband(directory, klist, eigenvalues, efermi):
 #Write the band data to 'BANDS', in (k,E) format, if we set ISPIN=2, we will get 'BANDS_up' and 'BANDS_down'
     if len(eigenvalues) == 1:
         try:
-            f0 = open(os.path.abspath(dir)+os.path.sep+"bands.dat","w")
+            f0 = open(os.path.abspath(directory)+os.path.sep+"bands.dat","w")
         except:
             print "Can't open or create the 'bands.dat' file"
             return 1
         f = [f0]
     elif len(eigenvalues) == 2:
         try:
-            f0 = open(os.path.abspath(dir)+os.path.sep+"bands-up.dat","w")
-            f1 = open(os.path.abspath(dir)+os.path.sep+"bands-down.dat","w")
+            f0 = open(os.path.abspath(directory)+os.path.sep+"bands-up.dat","w")
+            f1 = open(os.path.abspath(directory)+os.path.sep+"bands-down.dat","w")
         except:
             print "Can't open or create the 'bands-up.dat' and/or 'bands-down.dat' file"
             return 1
@@ -441,18 +432,18 @@ def writeband(dir, klist, eigenvalues, efermi):
     return 0
 
 
-def writeprojected(dir, klist, eigenvalues, projected, efermi):
+def writeprojected(directory, klist, eigenvalues, projected, efermi):
     if len(eigenvalues) == 1:
         try:
-            f0 = open(os.path.abspath(dir)+os.path.sep+"projs.dat","w")
+            f0 = open(os.path.abspath(directory)+os.path.sep+"projs.dat","w")
         except:
             print "Can't open or create the 'projs' file"
             return 1
         f = [f0]
     elif len(eigenvalues) == 2:
         try:
-            f0 = open(os.path.abspath(dir)+os.path.sep+"projs-up.dat","w")
-            f1 = open(os.path.abspath(dir)+os.path.sep+"projs-down.dat","w")
+            f0 = open(os.path.abspath(directory)+os.path.sep+"projs-up.dat","w")
+            f1 = open(os.path.abspath(directory)+os.path.sep+"projs-down.dat","w")
         except:
             print "Can't open or create the 'projs-up' and/or 'projs-down' file"
             return 1
@@ -483,18 +474,18 @@ def writeprojected(dir, klist, eigenvalues, projected, efermi):
     return 0              
 
 
-def writedos(dir, dos, efermi):
+def writedos(directory, dos, efermi):
     if len(dos) == 1:
         try:
-            f0 = open(os.path.abspath(dir)+os.path.sep+"dos.dat","w")
+            f0 = open(os.path.abspath(directory)+os.path.sep+"dos.dat","w")
         except:
             print "Can't open or create the 'dos.dat' file"
             return 1
         f = [f0]
     elif len(dos) == 2:
         try:
-            f0 = open(os.path.abspath(dir)+os.path.sep+"dos-up.dat","w")
-            f1 = open(os.path.abspath(dir)+os.path.sep+"dos-down.dat","w")
+            f0 = open(os.path.abspath(directory)+os.path.sep+"dos-up.dat","w")
+            f1 = open(os.path.abspath(directory)+os.path.sep+"dos-down.dat","w")
         except:
             print "Can't open or create the 'dos-up.dat' and/or 'dos-down.dat' file"
             return 1
@@ -512,18 +503,18 @@ def writedos(dir, dos, efermi):
     return 0
 
 
-def writepdos(dir, orbits, E, pdos, efermi):
+def writepdos(directory, orbits, E, pdos, efermi):
     if len(pdos) == 1:
         try:
-            f0 = open(os.path.abspath(dir)+os.path.sep+"pdos.dat","w")
+            f0 = open(os.path.abspath(directory)+os.path.sep+"pdos.dat","w")
         except:
             print "Can't open or create the 'dos' file"
             return 1
         f = [f0]
     elif len(pdos) == 2:
         try:
-            f0 = open(os.path.abspath(dir)+os.path.sep+"pdos-up.dat","w")
-            f1 = open(os.path.abspath(dir)+os.path.sep+"pdos-down.dat","w")
+            f0 = open(os.path.abspath(directory)+os.path.sep+"pdos-up.dat","w")
+            f1 = open(os.path.abspath(directory)+os.path.sep+"pdos-down.dat","w")
         except:
             print "Can't open or create the 'pdos-up.dat' and/or 'pdos-down.dat' file"
             return 1
@@ -532,10 +523,10 @@ def writepdos(dir, orbits, E, pdos, efermi):
         f = [f0 , f1]
     elif len(pdos) == 4:
         try:
-            f0 = open(os.path.abspath(dir)+os.path.sep+"pdos.dat","w")
-            f1 = open(os.path.abspath(dir)+os.path.sep+"pdos-mx.dat","w")
-            f2 = open(os.path.abspath(dir)+os.path.sep+"pdos-my.dat","w")
-            f3 = open(os.path.abspath(dir)+os.path.sep+"pdos-mz.dat","w")
+            f0 = open(os.path.abspath(directory)+os.path.sep+"pdos.dat","w")
+            f1 = open(os.path.abspath(directory)+os.path.sep+"pdos-mx.dat","w")
+            f2 = open(os.path.abspath(directory)+os.path.sep+"pdos-my.dat","w")
+            f3 = open(os.path.abspath(directory)+os.path.sep+"pdos-mz.dat","w")
         except:
             print "Can't open or create the 'pdos.dat' and/or 'pdos-m[x/y/z].dat' file"
             return 1
@@ -561,19 +552,20 @@ def writepdos(dir, orbits, E, pdos, efermi):
     return 0     
 
 
-def main():
+def readfile():
     printline()
     while True:
-        dir = raw_input("Please input the directory which cotains the file you want to deal [Enter for the current]:\n").strip()
-        if dir == "":
-            dir = "."
-        Modeling = readvasprun(dir)
-        if Modeling == None:
-            print "No file named 'vasprun.xml' in directory '%s' or it is broken, please try again." %(dir)
+        directory = raw_input("Please input the directory which cotains the file you want to deal [Enter for the current]:\n").strip()
+        vasp = VASPrun(directory)
+        if vasp.Modeling == None:
+            print "No file named 'vasprun.xml' in directory '{:s}' or it is broken, please try again.".format(directory)
         else:
-            printline()
             break
-    
+    printline()
+    return directory, vasp
+
+
+def fermicorrection(vasp):
     printline()
     print "Fermi level correction"
     print "Your can use the following options:"
@@ -582,37 +574,40 @@ def main():
     print "[3] Manuelly input a value."
     string  = raw_input("Which one do you want (if you input other value, we will read Fermi level from this file):").strip()
     if string == "1":
-        ef = 0.0
+        efermi = 0.0
     elif string == "2":
         while True:
-            dir1 = raw_input("Please input the directory which cotains the 'vsprun.xml' file'[Enter for '..']::\n").strip()
-            if dir1 == "":
-                dir1 = ".."
-            Modeling1 = readvasprun(dir1)
-            if Modeling1 == None:
-                print "No file named 'vasprun.xml' in directory '%s' or it is broken, please try again." %(dir1)
+            directory1 = raw_input("Please input the directory which cotains the 'vsprun.xml' file'[Enter for '..']::\n").strip()
+            if not directory1:
+                directory1 = ".."
+            vasp1 = VASPrun(directory1)
+            if vasp1.Modeling == None:
+                print "No file named 'vasprun.xml' in directory '{:s}' or it is broken, please try again.".format(directory1)
             else:
                 try:
-                    ef = getefermi(Modeling1)
+                    efermi = vasp1.efermi()
                 except:
-                    ef = 0
+                    efermi = 0.0
                 break
     elif string == "3":
         while True:
             try:
-                ef = float(raw_input("Please input the Fermi level:").strip())
+                efermi = float(raw_input("Please input the Fermi level:").strip())
             except:
                 print "Your input are not acceptable, please try again."
                 continue
             break
     else:
         try:
-            ef = getefermi(Modeling)
+            efermi = vasp.efermi()
         except:
-            ef = 0.0
-    print "The Fermi level of your system is %.10f eV." %(ef)
+            efermi = 0.0
+    print "The Fermi level of your system is {:.10f} eV.".format(efermi)
     printline()
-    
+    return efermi
+
+
+def selectjob():
     printline()
     print "Job selection"
     Jband = 0
@@ -637,40 +632,59 @@ def main():
         else:
             break
     printline()
-    
+    return Jband, Jdos
+
+
+def bandjob(directory, vasp, efermi):
+    printline()
+    print "Band struture"
+    kpt = vasp.kpointlist()
+    print "Your calculation use {:d} k-points".format(len(kpt))
+    rcb = vasp.recbasis()
+    k = calculatek(directory, kpt, rcb)
+    E = vasp.eigenvalues()
+    if vasp.Modeling.find("calculation").find("projected") != None:
+        sure = raw_input("It seems your calculation caotains the projected information, do you want to output them [Yes/no]:").strip()
+        if not sure or sure[0] in ["Y","y"]:
+            proj = vasp.projected()
+            writeprojected(directory, k, E, proj, efermi)
+        else:
+            writeband(directory, k, E, efermi)
+    printline()
+    return 0
+
+
+def dosjob(directory, vasp, efermi):
+    printline()
+    print "Density of states"
+    dos = vasp.dos()
+    writedos(directory, dos, efermi)
+    if vasp.Modeling.find("calculation").find("dos").find("partial") != None:
+        sure = raw_input("It seems your calculation caotains the projected information, do you want to output them [Yes/no]:").strip()
+        if not sure or sure[0] in ["Y","y"]:
+            orbits, E, pdos = vasp.pdos()
+            writepdos(directory, orbits, E, pdos, efermi)
+    printline()
+    return 0
+
+
+def finish():
+    printline()
+    print "All jobs have been done, exit now."
+    printline()
+
+
+def main():    
+    directory, vasp = readfile()
+    efermi = fermicorrection(vasp)
+    Jband, Jdos = selectjob()   
     if Jband == 1:
-        printline()
-        print "Band struture"
-        kpt = getkpointlist(Modeling)
-        print "Your calculation use %d k-points" %(len(kpt))
-        rcb = getrecbasis(Modeling)
-        k = calculatek(dir, kpt, rcb)
-        E = geteigenvalues(Modeling)
-        if Modeling.find("calculation").find("projected") != None:
-            sure = raw_input("It seems your calculation caotains the projected information, do you want to output them [Yes/no]:").strip()
-            if sure == "" or sure[0] == "Y" or sure[0] == "y":
-                proj = getprojected(Modeling)
-                writeprojected(dir, k, E, proj, ef)
-            else:
-                writeband(dir, k, E, ef)
-        printline()
-        
+        bandjob(directory, vasp, efermi)     
     if Jdos == 1:
-        printline()
-        print "Density of states"
-        dos = getdos(Modeling)
-        writedos(dir, dos, ef)
-        if Modeling.find("calculation").find("dos").find("partial") != None:
-            sure = raw_input("It seems your calculation caotains the projected information, do you want to output them [Yes/no]:").strip()
-            if sure == "" or sure[0] == "Y" or sure[0] == "y":
-                orbits, E, pdos = getpdos(Modeling)
-                writepdos(dir, orbits, E, pdos, ef)
-        printline()
-    
-    printline()
-    print "All jobs havs been done, exit now."
-    printline()
+        dosjob(directory, vasp, efermi)  
+    finish()
+    sys.exit(0)
 
 
 if __name__ == '__main__':
-    main()
+    main()      
