@@ -87,7 +87,7 @@ def main():
                 for nb in range(bgrid):
                     sums += pot[na + (nb + nc * bgrid) * agrid]
             potav[nc] = sums * scale
-    coor = map(lambda x: vec * (x + 1),range(grid))
+    coor = map(lambda x: vec * x ,range(grid))
     try:
         f = open("potav.dat","w")
     except:
