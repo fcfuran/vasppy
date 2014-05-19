@@ -91,7 +91,6 @@ def main():
     try:
         f = open("potav.dat","w")
     except:
-        print "Can't open or create the 'potav.dat' file"
         sys.exit(1)
     for i in range(grid):
         f.write("\t{:d}\t{:.10f}\t{:.10f}\n".format(i + 1, coor[i], potav[i]))
